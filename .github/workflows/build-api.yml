@@ -1,0 +1,50 @@
+name: Build API
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Lab4.Data/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'Lab4.Data/**'
+  workflow_dispatch:
+
+jobs:
+  build-api:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore Lab4.Data
+
+    - name: Build API
+      run: dotnet build Lab4.Data --configuration Release --no-restore
+
+    - name: Run API tests
+      run: dotnet test Lab4.Tests --configuration Release --no-build --filter "StudentRestApiTests OR StudentRepositoryTests OR StudentValidationTests"
+
+    - name: Publish API
+      run: dotnet publish Lab4.Data --configuration Release --no-build --output ./publish
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-build
+        path: ./publish/

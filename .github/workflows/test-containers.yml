@@ -1,0 +1,47 @@
+name: Test Containers
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'Lab4.Data/**'
+      - 'Lab4.Tests/**'
+  workflow_dispatch:
+
+jobs:
+  test-containers:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore Lab4.sln
+
+    - name: Build
+      run: dotnet build Lab4.sln --configuration Release --no-restore
+
+    - name: Run containerized tests
+      run: |
+        # Run tests that use Testcontainers (PostgreSQL integration tests)
+        # Note: Testcontainers will automatically pull and run PostgreSQL containers
+        dotnet test Lab4.Tests/Lab4.Tests.csproj --configuration Release --no-build --filter "PostgreSqlIntegrationTests" --verbosity normal
+      env:
+        # Environment variables for tests if needed
+        ASPNETCORE_ENVIRONMENT: Testing
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: container-test-results
+        path: |
+          **/TestResults/*.xml
+          **/TestResults/*.html
