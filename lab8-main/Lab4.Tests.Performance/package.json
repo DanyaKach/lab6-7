@@ -1,0 +1,16 @@
+{
+  "name": "lab4-performance-tests",
+  "version": "1.0.0",
+  "description": "K6 smoke tests for Lab4 Student API",
+  "scripts": {
+    "smoke": "k6 run scripts/smoke-test.js",
+    "smoke:staged": "k6 run -e BASE_URL=http://localhost:5000 scripts/smoke-test.js"
+  },
+  "keywords": [
+    "k6",
+    "smoke-testing",
+    "api-testing"
+  ],
+  "author": "Lab4 Team",
+  "license": "MIT"
+}
