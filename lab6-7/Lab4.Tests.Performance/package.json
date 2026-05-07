@@ -4,7 +4,11 @@
   "description": "K6 smoke tests for Lab4 Student API",
   "scripts": {
     "smoke": "k6 run scripts/smoke-test.js",
-    "smoke:staged": "k6 run -e BASE_URL=http://localhost:5000 scripts/smoke-test.js"
+    "smoke:staged": "k6 run -e BASE_URL=http://localhost:5000 scripts/smoke-test.js",
+    "load": "k6 run -e BASE_URL=http://localhost:5000 scripts/load-test.js",
+    "load:export": "k6 run -e BASE_URL=http://localhost:5000 --out json=load-results.json scripts/load-test.js",
+    "stress": "k6 run -e BASE_URL=http://localhost:5000 scripts/stress-test.js",
+    "stress:export": "k6 run -e BASE_URL=http://localhost:5000 --out json=stress-results.json scripts/stress-test.js"
   },
   "keywords": [
     "k6",

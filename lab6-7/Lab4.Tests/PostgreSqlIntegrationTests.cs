@@ -10,6 +10,8 @@ using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using Lab4.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Shouldly;
@@ -22,6 +24,7 @@ public class ApiFixture : IAsyncLifetime
 {
     private PostgreSqlContainer _dbContainer = null!;
     private WebApplicationFactory<Program> _factory = null!;
+    private string? _originalConnectionStringEnv;
 
     public HttpClient HttpClient { get; private set; } = null!;
     public string ConnectionString => _dbContainer.GetConnectionString();
@@ -37,11 +40,27 @@ public class ApiFixture : IAsyncLifetime
 
         await _dbContainer.StartAsync();
 
+        var dbConnectionString = _dbContainer.GetConnectionString();
+        _originalConnectionStringEnv = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+        Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", dbConnectionString);
+
         // Use WebApplicationFactory with real PostgreSQL connection
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseSetting("ConnectionStrings:DefaultConnection", ConnectionString);
+                builder.ConfigureServices(services =>
+                {
+                    var descriptors = services.Where(d =>
+                        d.ServiceType == typeof(DbContextOptions<AppDbContext>) ||
+                        d.ServiceType == typeof(AppDbContext)).ToList();
+                    foreach (var descriptor in descriptors)
+                    {
+                        services.Remove(descriptor);
+                    }
+
+                    services.AddDbContext<AppDbContext>(options =>
+                        options.UseNpgsql(dbConnectionString));
+                });
             });
 
         HttpClient = _factory.CreateClient();
@@ -50,6 +69,18 @@ public class ApiFixture : IAsyncLifetime
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+
+        await using var verifyConnection = new NpgsqlConnection(dbConnectionString);
+        await verifyConnection.OpenAsync();
+        await using var verifyCommand = new NpgsqlCommand(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'", verifyConnection);
+        await using var reader = await verifyCommand.ExecuteReaderAsync();
+        var tableNames = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            tableNames.Add(reader.GetString(0));
+        }
+        Console.WriteLine("Postgres tables: " + string.Join(",", tableNames));
     }
 
     public async ValueTask DisposeAsync()
@@ -57,6 +88,15 @@ public class ApiFixture : IAsyncLifetime
         HttpClient?.Dispose();
         _factory?.Dispose();
         if (_dbContainer != null) await _dbContainer.DisposeAsync();
+
+        if (_originalConnectionStringEnv is null)
+        {
+            Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", null);
+        }
+        else
+        {
+            Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _originalConnectionStringEnv);
+        }
     }
 }
 
